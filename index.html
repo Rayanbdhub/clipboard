@@ -260,9 +260,10 @@ body{font-family:var(--font);background:var(--bg);min-height:100vh;display:flex;
       <span id="s-label">Not connected</span>
     </div>
     <button class="btn export-btn" onclick="exportZip()">⬇ Export ZIP</button>
+    <button class="btn" id="connect-drive-btn" onclick="connectDrive()" style="background:linear-gradient(135deg,#6BCB77,#4D96FF);border:none;color:#fff">🔗 Connect Drive</button>
     <button class="btn" id="sync-now-btn" onclick="syncNow()" style="display:none">↑ Sync</button>
     <button class="btn" onclick="toggleShortcuts()" title="Shortcuts">⌨</button>
-    <button class="btn danger" id="signout-btn" onclick="signOut()" style="display:none">Sign out</button>
+    <button class="btn danger" id="signout-btn" onclick="signOut()" style="display:none;color:#FF6B6B">Sign out</button>
   </div>
 </div>
 
@@ -528,8 +529,33 @@ async function fetchUserInfo(){
     else av.textContent=(user_info.name||'?')[0].toUpperCase();
     document.getElementById('signout-btn').style.display='inline-flex';
     document.getElementById('sync-now-btn').style.display='inline-flex';
+    const cdb=document.getElementById('connect-drive-btn');
+    if(cdb) cdb.style.display='none';
   }catch(e){}
 }
+function connectDrive(){
+  const btn=document.getElementById('connect-drive-btn');
+  if(btn) btn.style.display='none';
+  gapi.load('client',async()=>{
+    await gapi.client.init({discoveryDocs:[DISCOVERY]});
+    gapi_ready=true;
+    token_client=google.accounts.oauth2.initTokenClient({
+      client_id:cfg.clientId,scope:SCOPES,
+      callback:async(resp)=>{
+        if(resp.error){
+          if(btn) btn.style.display='inline-flex';
+          alert('Auth error: '+resp.error);return;
+        }
+        access_token=resp.access_token;gapi.client.setToken({access_token});
+        await fetchUserInfo();
+        await findOrCreateFile();await loadFromDrive();startAutoSync();
+        showToast('Drive connected! ✓');
+      }
+    });
+    token_client.requestAccessToken({prompt:'select_account'});
+  });
+}
+
 function signOut(){
   if(access_token) google.accounts.oauth2.revoke(access_token);
   access_token=null;drive_file_id=null;user_info=null;clearInterval(sync_timer);
