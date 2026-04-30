@@ -277,7 +277,7 @@ body{font-family:var(--font);background:var(--bg);min-height:100vh;display:flex;
       <div class="step-num">1</div>
       <div class="step-body">
         <div class="step-title">Google Cloud Console এ যান</div>
-        <div class="step-desc"><a href="https://console.cloud.google.com" target="_blank" style="color:#C77DFF">console.cloud.google.com</a> → Clients → Create Client → Web app → Authorized JS origins: <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;font-size:11px;font-family:var(--mono)">https://rayanbdhub.github.io</code></div>
+        <div class="step-desc"><a href="https://console.cloud.google.com" target="_blank" style="color:#C77DFF">console.cloud.google.com</a> → Clients → Create Client → Web app → Authorized JS origins: <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;font-size:11px;font-family:var(--mono)">http://localhost:8765</code></div>
         <input class="config-input" id="client-id-inp" placeholder="Client ID (...apps.googleusercontent.com)"/>
       </div>
     </div>
@@ -301,8 +301,8 @@ body{font-family:var(--font);background:var(--bg);min-height:100vh;display:flex;
       </div>
     </div>
     <div style="background:rgba(77,150,255,0.1);border:1px solid rgba(77,150,255,0.3);border-radius:10px;padding:12px 14px">
-      <div style="font-size:12px;color:#4D96FF;font-weight:600;margin-bottom:4px">💡 ClipBoard_Launch.bat দিয়ে open করুন</div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.6">তাহলে Sign in কাজ করবে। অথবা Drive ছাড়াই ব্যবহার করুন।</div>
+      <div style="font-size:12px;color:#4D96FF;font-weight:600;margin-bottom:4px">💡 Sign in with Google click করুন</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6">যেকোনো Google account দিয়ে login করুন।</div>
     </div>
     <button class="btn" style="width:100%;justify-content:center;font-size:13px" onclick="skipSetup()">→ Drive ছাড়াই ব্যবহার করুন</button>
   </div>
@@ -442,7 +442,7 @@ const DISCOVERY='https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const EMOJIS=['📋','📝','💡','🔗','📌','🎯','🗂️','✏️','💬','📄','🔖','⭐','📊','🧠','🛠️','🎨','🔥','⚡','🌙','🎵'];
 const CARD_COLORS=['#FF6B6B','#FFD93D','#6BCB77','#4D96FF','#C77DFF','#FF9F43','#48CAE4','#F72585'];
 
-let cfg={clientId:'118105217229-q43l3glnkavi6049of2o0men7avi8ri1.apps.googleusercontent.com',fileName:'clipboard_data.json'};
+let cfg={clientId:'',fileName:'clipboard_data.json'};
 let gapi_ready=false,token_client=null,access_token=null;
 let drive_file_id=null,user_info=null,sync_timer=null;
 let _ctxClipId=null,_searchQ='';
@@ -453,12 +453,15 @@ let ST={tabs:[],active:null,emoji_sel:'📋'};
 // ── INIT ──
 function init(){
   loadLocal();
-  const savedClient=localStorage.getItem('cb_client_id');
-  const savedSkip=localStorage.getItem('cb_skip_drive');
-  if(savedSkip){showApp();return;}
-  if(savedClient){cfg.clientId=savedClient;document.getElementById('client-id-inp').value=savedClient;initGapi();}
+  showApp();
   document.addEventListener('keydown',handleHotkey);
   document.addEventListener('click',()=>{closeCtxMenu();document.querySelectorAll('.color-picker-pop.open').forEach(p=>p.classList.remove('open'));});
+  if(cfg.clientId){
+    gapi.load('client',async()=>{
+      await gapi.client.init({discoveryDocs:[DISCOVERY]});
+      gapi_ready=true;
+    });
+  }
 }
 
 function handleHotkey(e){
@@ -487,9 +490,10 @@ function loadLocal(){
   if(!ST.active&&ST.tabs.length) ST.active=ST.tabs[0].id;
 }
 function saveLocal(){localStorage.setItem('cb_data',JSON.stringify({tabs:ST.tabs,active:ST.active}));}
-function skipSetup(){localStorage.setItem('cb_skip_drive','1');showApp();}
+function skipSetup(){showApp();}
 function showApp(){
-  document.getElementById('setup-screen').style.display='none';
+  const ss=document.getElementById('setup-screen');
+  if(ss) ss.style.display='none';
   document.getElementById('app-screen').style.display='flex';
   render();setSyncState('local','Local only');
 }
@@ -497,11 +501,8 @@ function showApp(){
 // ── GOOGLE AUTH ──
 function initGapi(){gapi.load('client',async()=>{await gapi.client.init({discoveryDocs:[DISCOVERY]});gapi_ready=true;});}
 function startGoogleAuth(){
-  const cid=document.getElementById('client-id-inp').value.trim();
-  const fname=document.getElementById('file-name-inp').value.trim()||'clipboard_data.json';
-  if(!cid){alert('Client ID দিন!');return;}
-  cfg.clientId=cid;cfg.fileName=fname;
-  localStorage.setItem('cb_client_id',cid);localStorage.setItem('cb_file_name',fname);
+  const fname='clipboard_data.json';
+  cfg.fileName=fname;
   gapi.load('client',async()=>{
     await gapi.client.init({discoveryDocs:[DISCOVERY]});gapi_ready=true;
     token_client=google.accounts.oauth2.initTokenClient({
@@ -512,7 +513,7 @@ function startGoogleAuth(){
         await fetchUserInfo();showApp();await findOrCreateFile();await loadFromDrive();startAutoSync();
       }
     });
-    token_client.requestAccessToken({prompt:'select_account'});
+    token_client.requestAccessToken();
   });
 }
 async function fetchUserInfo(){
@@ -532,7 +533,7 @@ async function fetchUserInfo(){
 function signOut(){
   if(access_token) google.accounts.oauth2.revoke(access_token);
   access_token=null;drive_file_id=null;user_info=null;clearInterval(sync_timer);
-  localStorage.removeItem('cb_client_id');localStorage.removeItem('cb_skip_drive');location.reload();
+  location.reload();
 }
 
 // ── DRIVE OPS ──
