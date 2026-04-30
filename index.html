@@ -513,7 +513,7 @@ function startGoogleAuth(){
         await fetchUserInfo();showApp();await findOrCreateFile();await loadFromDrive();startAutoSync();
       }
     });
-    token_client.requestAccessToken();
+    token_client.requestAccessToken({prompt:'select_account',include_granted_scopes:true});
   });
 }
 async function fetchUserInfo(){
